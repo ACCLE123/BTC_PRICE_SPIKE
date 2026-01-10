@@ -43,7 +43,7 @@ def run_backtest(csv_path):
     detector = PriceSpikeDetector()
     simulator = TradeSimulator()
     
-    spike_count = 0
+    spikes = []
     
     print("Running backtest...")
     for _, row in df.iterrows():
@@ -56,7 +56,7 @@ def run_backtest(csv_path):
         # 2. Check for new spikes
         spike = detector.process_price(ts, price)
         if spike:
-            spike_count += 1
+            spikes.append(spike)
             # 3. If spike detected, signal simulator to enter trade
             simulator.handle_spike(spike)
             
@@ -71,21 +71,37 @@ def run_backtest(csv_path):
     print(f"{'Max Drawdown':<20} | {stats['max_drawdown']:>11.2%} | {bh_stats['max_dd']:>11.2%}")
     print(f"{'Calmar Ratio':<20} | {strategy_calmar:>11.2f} | {bh_stats['calmar']:>11.2f}")
     print("-" * 50)
-    print(f"Total Spikes: {spike_count}, Total Trades: {stats['total_trades']}, Win Rate: {stats['win_rate']:.2%}")
+    print(f"Total Spikes: {len(spikes)}, Total Trades: {stats['total_trades']}, Win Rate: {stats['win_rate']:.2%}")
     print("="*50)
     
-    # Optional: Display first few trades
+    # --- RECORDING DATA ---
+    
+    # 1. Record Spike Events
+    if spikes:
+        spike_df = pd.DataFrame([vars(s) for s in spikes])
+        spike_df['timestamp'] = pd.to_datetime(spike_df['timestamp'], unit='s')
+        spike_df['baseline_timestamp'] = pd.to_datetime(spike_df['baseline_timestamp'], unit='s')
+        spike_df.to_csv('spike_events.csv', index=False)
+        print(f"\n[Recorded] All spike events saved to 'spike_events.csv'")
+
+    # 2. Record Trade Records
     if simulator.trades:
-        print("\nFirst 5 Trades:")
-        trade_df = pd.DataFrame([
-            {
-                "Entry Time": datetime.fromtimestamp(t.entry_time).strftime('%Y-%m-%d %H:%M'),
+        trade_data = []
+        for t in simulator.trades:
+            trade_data.append({
+                "Entry Time": datetime.fromtimestamp(t.entry_time),
                 "Entry Price": t.entry_price,
+                "Exit Time": datetime.fromtimestamp(t.exit_time) if t.exit_time else None,
+                "Exit Price": t.exit_price,
                 "Exit Reason": t.exit_reason,
-                "PnL %": f"{t.pnl_pct:.2%}"
-            } for t in simulator.trades[:5]
-        ])
-        print(trade_df.to_string(index=False))
+                "PnL %": t.pnl_pct
+            })
+        trade_df = pd.DataFrame(trade_data)
+        trade_df.to_csv('trade_records.csv', index=False)
+        print(f"[Recorded] All trade records saved to 'trade_records.csv'")
+        
+        print("\nSample of last 5 trades:")
+        print(trade_df.tail(5).to_string(index=False))
 
 if __name__ == "__main__":
     import os
