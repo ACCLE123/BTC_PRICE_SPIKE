@@ -11,6 +11,7 @@ class TradeSimulator:
     def handle_spike(self, spike_event):
         """Enter a trade if no trade is currently active."""
         if self.active_trade is None:
+            # buy at the spike price
             self.active_trade = TradeRecord(
                 entry_time=spike_event.timestamp,
                 entry_price=spike_event.current_price
@@ -42,6 +43,7 @@ class TradeSimulator:
             self.active_trade.is_active = False
             
             self.trades.append(self.active_trade)
+            # sell at the exit price
             self.active_trade = None
 
     def get_stats(self):
